@@ -1,0 +1,18 @@
+{
+  "id": "EXP001",
+  "name": "Demo Expert",
+  "group": "Expert",
+  "front_videos": [
+    "demo_front_01.mp4",
+    "demo_front_02.mp4"
+  ],
+  "side_videos": [
+    "demo_side_01.mp4",
+    "demo_side_02.mp4"
+  ],
+  "emg_files": [
+    "demo_emg_01.csv",
+    "demo_emg_02.csv"
+  ],
+  "remarks": "Public demo subject"
+}
