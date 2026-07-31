@@ -1,6 +1,7 @@
 ﻿import base64
 import json
 import socket
+import threading
 import time
 from io import BytesIO
 from pathlib import Path
@@ -24,6 +25,15 @@ except ImportError:
     mp = None
     vision = None
     BaseOptions = None
+
+try:
+    import av
+    from streamlit_webrtc import VideoProcessorBase, WebRtcMode, webrtc_streamer
+except ImportError:
+    av = None
+    VideoProcessorBase = object
+    WebRtcMode = None
+    webrtc_streamer = None
 
 st.set_page_config(page_title="EMA Demo Viewer Ver.0.2.2", page_icon="EMA", layout="wide", initial_sidebar_state="collapsed")
 
@@ -139,7 +149,7 @@ def css() -> None:
     .timeline-item{display:grid;grid-template-columns:58px 10px 1fr;gap:12px;align-items:start;padding:0 0 15px}.timeline-time{color:var(--muted);font-size:13px}.timeline-dot{width:10px;height:10px;margin-top:4px;border-radius:50%;box-shadow:0 0 16px currentColor}.timeline-label{font-weight:700;line-height:1.15}.timeline-state{color:var(--muted);font-size:13px;margin-top:3px}.score-card,.coach-card{padding:12px;border:1px solid var(--stroke);border-radius:14px;background:var(--soft);margin-bottom:10px}.score-row{display:flex;justify-content:space-between;gap:12px;margin-bottom:8px;font-size:14px}.score-value{color:var(--green);font-weight:800}.score-comment{margin-top:8px;color:#cbd5e1;font-size:12.5px;line-height:1.45}.bar{height:8px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.1)}.bar span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--cyan),var(--green))}.coach-card strong{display:block;margin-bottom:6px;color:var(--cyan)}.coach-card p{margin:0;color:#d8deea;font-size:14px;line-height:1.48}
     .connection-panel{margin-bottom:16px;padding:16px;border:1px solid var(--stroke);border-radius:18px;background:var(--panel);box-shadow:0 16px 40px rgba(0,0,0,.24)}.connection-title{font-size:18px;font-weight:850;margin-bottom:10px}.connection-note{color:#d8deea;font-size:13px;line-height:1.45;margin-top:8px}.connection-label{color:var(--muted);font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
 
-    .prototype-shell{min-height:calc(100vh - 120px);padding:34px;border-radius:28px;background:linear-gradient(180deg,#fff 0%,#f4f8fd 100%);color:#102033;border:1px solid rgba(12,28,48,.08);box-shadow:0 24px 70px rgba(3,10,22,.28)}.prototype-hero{margin:4px 0 28px}.prototype-hero h1{margin:0;color:#061426;font-size:42px;line-height:1.05;font-weight:900}.prototype-hero p{margin:10px 0 0;color:#52677e;font-size:18px}.prototype-card{padding:18px;border-radius:18px;background:#fff;border:1px solid rgba(12,28,48,.09);box-shadow:0 16px 36px rgba(11,35,68,.08)}.prototype-card h2{margin:0 0 14px;color:#102033;font-size:18px}.camera-frame{min-height:340px;border-radius:16px;background:#eef4fb;border:1px solid rgba(12,28,48,.09);display:grid;place-items:center;color:#607187;text-align:center}.status-grid{display:grid;grid-template-columns:1fr;gap:12px}.status-item{padding:14px;border-radius:14px;background:#f7fbff;border:1px solid rgba(12,28,48,.08)}.status-label{color:#66778c;font-size:12px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}.status-value{margin-top:5px;color:#102033;font-size:22px;font-weight:900}.status-value.running{color:#0b75d1}.prototype-note{margin-top:16px;color:#66778c;font-size:13px;line-height:1.65}.prototype-controls div[data-testid="stButton"]{margin-bottom:8px}.prototype-controls button{min-height:52px;border-radius:999px;background:linear-gradient(135deg,#0d7bdd,#0b4c96);color:#fff;font-weight:900}.prototype-muted{color:#66778c;font-size:13px;line-height:1.6}.angle-grid{display:grid;grid-template-columns:1fr;gap:10px}.angle-row{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:11px 12px;border-radius:12px;background:#f7fbff;border:1px solid rgba(12,28,48,.08)}.angle-name{color:#66778c;font-size:13px;font-weight:800}.angle-value{color:#102033;font-size:19px;font-weight:900}.angle-section{margin-top:14px}.overlay-angle-label{display:inline-block;padding:4px 7px;border-radius:999px;background:rgba(6,20,38,.82);color:#fff;font-size:12px;font-weight:850}.metrics-grid{display:grid;grid-template-columns:1fr;gap:10px}.metric-row{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:11px 12px;border-radius:12px;background:#f7fbff;border:1px solid rgba(12,28,48,.08)}.metric-name{color:#66778c;font-size:13px;font-weight:800}.metric-value{color:#102033;font-size:18px;font-weight:900}.timeline-card{margin-top:18px}.summary-note{margin-top:12px;color:#66778c;font-size:12px;line-height:1.6}.trajectory-empty{color:#66778c;font-size:13px;line-height:1.55}.measurement-controls div[data-testid="stButton"]{margin-bottom:8px}.measurement-controls button{min-height:52px;border-radius:999px;background:linear-gradient(135deg,#0d7bdd,#0b4c96);color:#fff;font-weight:900}.feature-value{color:#0b75d1;font-size:20px;font-weight:950}.feature-row{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:12px;border-radius:12px;background:#f7fbff;border:1px solid rgba(12,28,48,.08)}.feature-name{color:#66778c;font-size:13px;font-weight:850}.feature-grid{display:grid;grid-template-columns:1fr;gap:10px}
+    .prototype-shell{min-height:calc(100vh - 120px);padding:34px;border-radius:28px;background:linear-gradient(180deg,#fff 0%,#f4f8fd 100%);color:#102033;border:1px solid rgba(12,28,48,.08);box-shadow:0 24px 70px rgba(3,10,22,.28)}.prototype-hero{margin:4px 0 28px}.prototype-hero h1{margin:0;color:#061426;font-size:42px;line-height:1.05;font-weight:900}.prototype-hero p{margin:10px 0 0;color:#52677e;font-size:18px}.prototype-card{padding:18px;border-radius:18px;background:#fff;border:1px solid rgba(12,28,48,.09);box-shadow:0 16px 36px rgba(11,35,68,.08)}.prototype-card h2{margin:0 0 14px;color:#102033;font-size:18px}.camera-frame{min-height:340px;border-radius:16px;background:#eef4fb;border:1px solid rgba(12,28,48,.09);display:grid;place-items:center;color:#607187;text-align:center}.status-grid{display:grid;grid-template-columns:1fr;gap:12px}.status-item{padding:14px;border-radius:14px;background:#f7fbff;border:1px solid rgba(12,28,48,.08)}.status-label{color:#66778c;font-size:12px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}.status-value{margin-top:5px;color:#102033;font-size:22px;font-weight:900}.status-value.running{color:#0b75d1}.prototype-note{margin-top:16px;color:#66778c;font-size:13px;line-height:1.65}.prototype-controls div[data-testid="stButton"]{margin-bottom:8px}.prototype-controls button{min-height:52px;border-radius:999px;background:linear-gradient(135deg,#0d7bdd,#0b4c96);color:#fff;font-weight:900}.prototype-muted{color:#66778c;font-size:13px;line-height:1.6}.camera-source-card{margin-bottom:18px}.camera-help{margin-top:10px;color:#66778c;font-size:13px;line-height:1.6}.error-card{padding:16px;border-radius:16px;background:#fff7f7;border:1px solid rgba(220,38,38,.18);color:#7f1d1d}.error-card strong{display:block;margin-bottom:8px;color:#b91c1c}.debug-grid{display:grid;grid-template-columns:1fr;gap:8px}.debug-row{display:flex;justify-content:space-between;gap:12px;padding:9px 10px;border-radius:10px;background:#f7fbff;border:1px solid rgba(12,28,48,.08);font-size:13px}.debug-label{color:#66778c;font-weight:800}.debug-value{color:#102033;font-weight:900;text-align:right}.angle-grid{display:grid;grid-template-columns:1fr;gap:10px}.angle-row{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:11px 12px;border-radius:12px;background:#f7fbff;border:1px solid rgba(12,28,48,.08)}.angle-name{color:#66778c;font-size:13px;font-weight:800}.angle-value{color:#102033;font-size:19px;font-weight:900}.angle-section{margin-top:14px}.overlay-angle-label{display:inline-block;padding:4px 7px;border-radius:999px;background:rgba(6,20,38,.82);color:#fff;font-size:12px;font-weight:850}.metrics-grid{display:grid;grid-template-columns:1fr;gap:10px}.metric-row{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:11px 12px;border-radius:12px;background:#f7fbff;border:1px solid rgba(12,28,48,.08)}.metric-name{color:#66778c;font-size:13px;font-weight:800}.metric-value{color:#102033;font-size:18px;font-weight:900}.timeline-card{margin-top:18px}.summary-note{margin-top:12px;color:#66778c;font-size:12px;line-height:1.6}.trajectory-empty{color:#66778c;font-size:13px;line-height:1.55}.measurement-controls div[data-testid="stButton"]{margin-bottom:8px}.measurement-controls button{min-height:52px;border-radius:999px;background:linear-gradient(135deg,#0d7bdd,#0b4c96);color:#fff;font-weight:900}.feature-value{color:#0b75d1;font-size:20px;font-weight:950}.feature-row{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:12px;border-radius:12px;background:#f7fbff;border:1px solid rgba(12,28,48,.08)}.feature-name{color:#66778c;font-size:13px;font-weight:850}.feature-grid{display:grid;grid-template-columns:1fr;gap:10px}
     @media(max-width:760px){.phone-warning{display:block}.block-container{min-width:0;padding:10px}.ipad-shell{border-radius:24px;padding:10px}.screen{border-radius:18px;padding:16px}.home-shell{min-width:0;padding:24px 18px}.home-hero{margin-top:20px}.home-hero h1{font-size:42px}.home-hero .subtitle{font-size:20px}.home-card{height:auto;min-height:230px}.about-ema{margin-top:42px;padding:22px}.splash-inner{padding-inline:20px}.splash-subtitle{font-size:21px}.splash-system{font-size:16px}.start-button-wrap div[data-testid="stButton"]{margin-top:-96px}.app-nav{gap:10px}.nav-brand{display:none}.nav-home button,.nav-back button{min-width:120px}.prototype-shell{padding:24px 18px}.prototype-hero h1{font-size:34px}.camera-frame{min-height:240px}}
     </style>
     """, unsafe_allow_html=True)
@@ -778,7 +788,10 @@ def build_timeline_dataframe(metrics: list[dict], max_points: int = 120) -> pd.D
     return pd.DataFrame(rows, columns=columns).dropna(how="all", subset=["Left Elbow Angle", "Left Shoulder Angle", "Trunk Inclination"])
 
 
-def append_frame_metric(
+
+def build_frame_metric(
+    metrics: list[dict],
+    measurement_start_time: float,
     fps: float,
     pose_detected: bool,
     pose_quality: str,
@@ -786,13 +799,9 @@ def append_frame_metric(
     left_wrist: tuple[float, float] | None,
     right_wrist: tuple[float, float] | None,
     angles: dict[str, float | None],
-    max_records: int = 1800,
-) -> None:
-    ensure_measurement_state()
-    if st.session_state.measurement_start_time is None:
-        st.session_state.measurement_start_time = time.time()
-    metrics = st.session_state.frame_metrics
-    timestamp_sec = time.time() - st.session_state.measurement_start_time
+    timestamp: float | None = None,
+) -> dict:
+    timestamp_sec = (time.time() if timestamp is None else timestamp) - measurement_start_time
     previous = metrics[-1] if metrics else None
     delta_time = None if previous is None else max(0.0, timestamp_sec - previous["timestamp_sec"])
     left_velocity = calculate_velocity(None if previous is None else previous.get("left_wrist"), left_wrist, delta_time)
@@ -837,10 +846,41 @@ def append_frame_metric(
     current["smoothness"] = calculate_smoothness_score(projected_metrics)
     current["pause_time"] = calculate_pause_time(projected_metrics)
     current["pause_ratio"] = calculate_pause_ratio(projected_metrics)
+    return current
+
+
+def append_metric_to_list(metrics: list[dict], current: dict, max_records: int = 1800) -> None:
     metrics.append(current)
-    st.session_state.latest_feature_vector = calculate_feature_vector(metrics)
     del metrics[:-max_records]
 
+
+def append_frame_metric(
+    fps: float,
+    pose_detected: bool,
+    pose_quality: str,
+    landmark_count: int,
+    left_wrist: tuple[float, float] | None,
+    right_wrist: tuple[float, float] | None,
+    angles: dict[str, float | None],
+    max_records: int = 1800,
+) -> None:
+    ensure_measurement_state()
+    if st.session_state.measurement_start_time is None:
+        st.session_state.measurement_start_time = time.time()
+    metrics = st.session_state.frame_metrics
+    current = build_frame_metric(
+        metrics,
+        st.session_state.measurement_start_time,
+        fps,
+        pose_detected,
+        pose_quality,
+        landmark_count,
+        left_wrist,
+        right_wrist,
+        angles,
+    )
+    append_metric_to_list(metrics, current, max_records)
+    st.session_state.latest_feature_vector = calculate_feature_vector(metrics)
 
 def draw_angle_label(overlay: np.ndarray, landmarks: list, index: int, label: str, angle: float | None) -> None:
     point = get_landmark_point(landmarks, index)
@@ -853,8 +893,16 @@ def draw_angle_label(overlay: np.ndarray, landmarks: list, index: int, label: st
     cv2.putText(overlay, f"{label} {angle:.0f}deg", (x + 8, max(18, y - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (6, 20, 38), 1, cv2.LINE_AA)
 
 
-def draw_pose_overlay(frame: np.ndarray, landmarks: list, angles: dict[str, float | None] | None = None) -> np.ndarray:
+def draw_pose_overlay_frame(
+    frame: np.ndarray,
+    landmarks: list,
+    angles: dict[str, float | None] | None = None,
+    left_trajectory: list[tuple[float, float]] | None = None,
+    right_trajectory: list[tuple[float, float]] | None = None,
+) -> np.ndarray:
     overlay = frame.copy()
+    if cv2 is None:
+        return overlay
     height, width = overlay.shape[:2]
     points: list[tuple[int, int] | None] = []
     for landmark in landmarks:
@@ -871,10 +919,8 @@ def draw_pose_overlay(frame: np.ndarray, landmarks: list, angles: dict[str, floa
     for point in points:
         if point:
             cv2.circle(overlay, point, 4, (77, 208, 225), -1)
-    left_trajectory = st.session_state.left_wrist_trajectory if "left_wrist_trajectory" in st.session_state else []
-    right_trajectory = st.session_state.right_wrist_trajectory if "right_wrist_trajectory" in st.session_state else []
-    draw_trajectory(overlay, left_trajectory, (77, 208, 225), 3)
-    draw_trajectory(overlay, right_trajectory, (32, 117, 209), 2)
+    draw_trajectory(overlay, left_trajectory or [], (77, 208, 225), 3)
+    draw_trajectory(overlay, right_trajectory or [], (32, 117, 209), 2)
     if angles:
         draw_angle_label(overlay, landmarks, 13, "L Elbow", angles.get("left_elbow"))
         draw_angle_label(overlay, landmarks, 14, "R Elbow", angles.get("right_elbow"))
@@ -882,6 +928,400 @@ def draw_pose_overlay(frame: np.ndarray, landmarks: list, angles: dict[str, floa
         draw_angle_label(overlay, landmarks, 12, "R Shoulder", angles.get("right_shoulder"))
     return overlay
 
+
+def draw_pose_overlay(frame: np.ndarray, landmarks: list, angles: dict[str, float | None] | None = None) -> np.ndarray:
+    left_trajectory = st.session_state.left_wrist_trajectory if "left_wrist_trajectory" in st.session_state else []
+    right_trajectory = st.session_state.right_wrist_trajectory if "right_wrist_trajectory" in st.session_state else []
+    return draw_pose_overlay_frame(frame, landmarks, angles, left_trajectory, right_trajectory)
+
+
+def smooth_angles_with_history(history: list[dict[str, float | None]], current_angles: dict[str, float | None], window_size: int = 5) -> dict[str, float | None]:
+    history.append(current_angles)
+    del history[:-window_size]
+    smoothed: dict[str, float | None] = {}
+    for key in current_angles:
+        values = [frame[key] for frame in history if frame.get(key) is not None]
+        smoothed[key] = float(np.mean(values)) if values else None
+    return smoothed
+
+
+def create_pose_landmarker():
+    if mp is None or vision is None or BaseOptions is None or not POSE_MODEL_PATH.exists():
+        return None
+    options = vision.PoseLandmarkerOptions(
+        base_options=BaseOptions(model_asset_path=str(POSE_MODEL_PATH)),
+        running_mode=vision.RunningMode.IMAGE,
+        num_poses=1,
+        min_pose_detection_confidence=0.5,
+        min_pose_presence_confidence=0.5,
+        min_tracking_confidence=0.5,
+    )
+    return vision.PoseLandmarker.create_from_options(options)
+
+
+class BrowserPoseProcessor(VideoProcessorBase):
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.measurement_start_time = time.time()
+        self.previous_time = time.perf_counter()
+        self.metrics: list[dict] = []
+        self.left_wrist_trajectory: list[tuple[float, float]] = []
+        self.right_wrist_trajectory: list[tuple[float, float]] = []
+        self.angle_history: list[dict[str, float | None]] = []
+        self.latest_feature_vector: dict[str, object] = calculate_feature_vector([])
+        self.frame_count = 0
+        self.fps = 0.0
+        self.resolution = "-"
+        self.pose_detected = False
+        self.pose_quality = "Not Detected"
+        self.landmark_count = 0
+        self.error_message = ""
+        self.landmarker = None
+        if cv2 is None:
+            self.error_message = "opencv-python is not available."
+        elif mp is None or vision is None or BaseOptions is None:
+            self.error_message = "mediapipe is not available."
+        elif not POSE_MODEL_PATH.exists():
+            self.error_message = "pose_landmarker_lite.task is missing."
+        else:
+            try:
+                self.landmarker = create_pose_landmarker()
+            except Exception as error:
+                self.error_message = f"Pose model initialization failed: {error}"
+
+    def recv(self, frame):
+        if av is None or cv2 is None:
+            return frame
+        bgr = frame.to_ndarray(format="bgr24")
+        rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+        now = time.perf_counter()
+        elapsed = now - self.previous_time
+        fps = 1.0 / elapsed if elapsed > 0 else 0.0
+        self.previous_time = now
+        pose_detected = False
+        landmark_count = 0
+        pose_quality = "Not Detected"
+        angles = {
+            "left_elbow": None,
+            "right_elbow": None,
+            "left_shoulder": None,
+            "right_shoulder": None,
+            "left_knee": None,
+            "right_knee": None,
+            "trunk_inclination": None,
+        }
+        overlay = rgb.copy()
+
+        if self.landmarker is not None:
+            try:
+                mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+                results = self.landmarker.detect(mp_image)
+                landmarks = results.pose_landmarks[0] if results.pose_landmarks else []
+                pose_detected = bool(landmarks)
+                landmark_count = len(landmarks)
+                pose_quality = get_pose_quality(landmarks)
+                if pose_detected:
+                    raw_angles = calculate_joint_angles(landmarks)
+                    angles = smooth_angles_with_history(self.angle_history, raw_angles)
+                    left_wrist = get_normalized_xy(landmarks, 15)
+                    right_wrist = get_normalized_xy(landmarks, 16)
+                    if left_wrist is not None:
+                        self.left_wrist_trajectory.append(left_wrist)
+                        del self.left_wrist_trajectory[:-120]
+                    if right_wrist is not None:
+                        self.right_wrist_trajectory.append(right_wrist)
+                        del self.right_wrist_trajectory[:-120]
+                    current = build_frame_metric(
+                        self.metrics,
+                        self.measurement_start_time,
+                        fps,
+                        pose_detected,
+                        pose_quality,
+                        landmark_count,
+                        left_wrist,
+                        right_wrist,
+                        angles,
+                    )
+                    append_metric_to_list(self.metrics, current)
+                    self.latest_feature_vector = calculate_feature_vector(self.metrics)
+                    overlay = draw_pose_overlay_frame(rgb, landmarks, angles, self.left_wrist_trajectory, self.right_wrist_trajectory)
+            except Exception as error:
+                self.error_message = f"Frame processing failed: {error}"
+
+        with self.lock:
+            self.frame_count += 1
+            self.fps = fps
+            self.resolution = f"{rgb.shape[1]} x {rgb.shape[0]}"
+            self.pose_detected = pose_detected
+            self.pose_quality = pose_quality
+            self.landmark_count = landmark_count
+        return av.VideoFrame.from_ndarray(cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR), format="bgr24")
+
+    def get_snapshot(self) -> dict:
+        with self.lock:
+            return {
+                "metrics": self.metrics.copy(),
+                "feature_vector": self.latest_feature_vector,
+                "frame_count": self.frame_count,
+                "fps": self.fps,
+                "resolution": self.resolution,
+                "pose_detected": self.pose_detected,
+                "pose_quality": self.pose_quality,
+                "landmark_count": self.landmark_count,
+                "error_message": self.error_message,
+            }
+
+
+
+def render_camera_status(
+    status: str,
+    fps: float,
+    pose_detection: str,
+    pose_quality: str,
+    landmark_count: int,
+    camera_type: str,
+    camera_name: str,
+    resolution: str,
+    frame_count: int,
+) -> str:
+    status_class = " running" if status == "Running" else ""
+    return (
+        '<div class="status-grid">'
+        f'<div class="status-item"><div class="status-label">Camera Status</div><div class="status-value{status_class}">{status}</div></div>'
+        f'<div class="status-item"><div class="status-label">FPS</div><div class="status-value">{fps:.1f}</div></div>'
+        f'<div class="status-item"><div class="status-label">Pose Detection</div><div class="status-value">{pose_detection}</div></div>'
+        f'<div class="status-item"><div class="status-label">Pose Quality</div><div class="status-value">{pose_quality}</div></div>'
+        f'<div class="status-item"><div class="status-label">Detected Landmarks</div><div class="status-value">{landmark_count}</div></div>'
+        '</div>'
+        '<div class="debug-grid" style="margin-top:12px">'
+        f'<div class="debug-row"><span class="debug-label">Camera Type</span><span class="debug-value">{camera_type}</span></div>'
+        f'<div class="debug-row"><span class="debug-label">Camera Name</span><span class="debug-value">{camera_name}</span></div>'
+        f'<div class="debug-row"><span class="debug-label">Resolution</span><span class="debug-value">{resolution}</span></div>'
+        f'<div class="debug-row"><span class="debug-label">Frame Count</span><span class="debug-value">{frame_count}</span></div>'
+        '</div>'
+    )
+
+
+def render_camera_error(title: str, cause: str, action: str, state: str) -> str:
+    return (
+        '<div class="error-card">'
+        f'<strong>{title}</strong>'
+        f'<div>Cause: {cause}</div>'
+        f'<div>Action: {action}</div>'
+        f'<div>Current State: {state}</div>'
+        '</div>'
+    )
+
+
+def render_timeline_and_summary(timeline_placeholder, summary_placeholder, metrics: list[dict]) -> None:
+    timeline_df = build_timeline_dataframe(metrics)
+    if timeline_df.empty:
+        timeline_placeholder.markdown('<div class="trajectory-empty">Motion Timeline: Insufficient Data</div>', unsafe_allow_html=True)
+    else:
+        timeline_placeholder.line_chart(timeline_df, x="Frame", y=["Left Elbow Angle", "Left Shoulder Angle", "Trunk Inclination"], height=240)
+    summary_placeholder.markdown(render_motion_metrics(metrics) + '<div class="summary-note">Prototype motion metrics. Not yet compared with expert reference data.</div>', unsafe_allow_html=True)
+
+
+def browser_camera_constraints(camera_name: str) -> dict:
+    if camera_name == "Front Camera":
+        video_constraints: dict[str, object] = {"facingMode": "user", "width": {"ideal": 1280}, "height": {"ideal": 720}}
+    elif camera_name == "Back Camera":
+        video_constraints = {"facingMode": {"ideal": "environment"}, "width": {"ideal": 1280}, "height": {"ideal": 720}}
+    else:
+        video_constraints = {"width": {"ideal": 1280}, "height": {"ideal": 720}}
+    return {"video": video_constraints, "audio": False}
+
+
+def render_browser_camera_panel(
+    camera_name: str,
+    status_placeholder,
+    angles_placeholder,
+    features_placeholder,
+    metrics_placeholder,
+    timeline_placeholder,
+    summary_placeholder,
+) -> None:
+    if webrtc_streamer is None or WebRtcMode is None or av is None:
+        st.markdown(render_camera_error(
+            "Browser Camera Not Supported",
+            "streamlit-webrtc or PyAV is not installed in this environment.",
+            "Install dependencies from requirements.txt and restart Streamlit.",
+            "Browser camera disabled",
+        ), unsafe_allow_html=True)
+        status_placeholder.markdown(render_camera_status("Unavailable", 0.0, "Not Available", "Not Detected", 0, "Browser Camera", camera_name, "-", 0), unsafe_allow_html=True)
+        angles_placeholder.markdown(render_joint_angles({}), unsafe_allow_html=True)
+        features_placeholder.markdown(render_motion_features(st.session_state.frame_metrics), unsafe_allow_html=True)
+        metrics_placeholder.markdown(render_motion_metrics(st.session_state.frame_metrics), unsafe_allow_html=True)
+        render_timeline_and_summary(timeline_placeholder, summary_placeholder, st.session_state.frame_metrics)
+        return
+
+    if cv2 is None or mp is None or vision is None or BaseOptions is None or not POSE_MODEL_PATH.exists():
+        missing = []
+        if cv2 is None:
+            missing.append("opencv-python")
+        if mp is None or vision is None or BaseOptions is None:
+            missing.append("mediapipe")
+        if not POSE_MODEL_PATH.exists():
+            missing.append("pose_landmarker_lite.task")
+        st.markdown(render_camera_error(
+            "Pose Engine Not Available",
+            ", ".join(missing),
+            "Confirm requirements.txt installation and model asset deployment.",
+            "Camera UI remains available, pose processing disabled",
+        ), unsafe_allow_html=True)
+
+    try:
+        ctx = webrtc_streamer(
+            key=f"ema-browser-camera-{camera_name.lower().replace(' ', '-')}",
+            mode=WebRtcMode.SENDRECV,
+            media_stream_constraints=browser_camera_constraints(camera_name),
+            video_processor_factory=BrowserPoseProcessor,
+            async_processing=True,
+        )
+    except Exception as error:
+        st.markdown(render_camera_error(
+            "Browser Camera Not Available",
+            str(error),
+            "Open this page in a normal browser session, allow camera permission, or use Local OpenCV for desktop development.",
+            "WebRTC initialization failed",
+        ), unsafe_allow_html=True)
+        status_placeholder.markdown(render_camera_status("Error", 0.0, "Not Available", "Not Detected", 0, "Browser Camera", camera_name, "-", 0), unsafe_allow_html=True)
+        angles_placeholder.markdown(render_joint_angles({}), unsafe_allow_html=True)
+        features_placeholder.markdown(render_motion_features(st.session_state.frame_metrics), unsafe_allow_html=True)
+        metrics_placeholder.markdown(render_motion_metrics(st.session_state.frame_metrics), unsafe_allow_html=True)
+        render_timeline_and_summary(timeline_placeholder, summary_placeholder, st.session_state.frame_metrics)
+        return
+
+    st.markdown(
+        '<div class="camera-help">Your browser will ask for camera permission on first use. '
+        'If the camera does not start, allow camera access in the browser permission dialog and reload the page. '
+        'On iPhone, iPad, and Android, HTTPS is required for camera access.</div>',
+        unsafe_allow_html=True,
+    )
+
+    snapshot = ctx.video_processor.get_snapshot() if ctx.video_processor else {
+        "metrics": st.session_state.frame_metrics,
+        "frame_count": 0,
+        "fps": 0.0,
+        "resolution": "-",
+        "pose_detected": False,
+        "pose_quality": "Not Detected",
+        "landmark_count": 0,
+        "error_message": "",
+    }
+    metrics = snapshot["metrics"]
+    status = "Running" if ctx.state.playing else "Stopped"
+    pose_detection = "Detected" if snapshot["pose_detected"] else "Not Detected"
+    status_placeholder.markdown(render_camera_status(status, snapshot["fps"], pose_detection, snapshot["pose_quality"], snapshot["landmark_count"], "Browser Camera", camera_name, snapshot["resolution"], snapshot["frame_count"]), unsafe_allow_html=True)
+    angles_placeholder.markdown(render_joint_angles({
+        "left_elbow": metrics[-1].get("left_elbow_angle") if metrics else None,
+        "right_elbow": metrics[-1].get("right_elbow_angle") if metrics else None,
+        "left_shoulder": metrics[-1].get("left_shoulder_angle") if metrics else None,
+        "right_shoulder": metrics[-1].get("right_shoulder_angle") if metrics else None,
+        "trunk_inclination": metrics[-1].get("trunk_inclination") if metrics else None,
+        "left_knee": metrics[-1].get("left_knee_angle") if metrics else None,
+        "right_knee": metrics[-1].get("right_knee_angle") if metrics else None,
+    }), unsafe_allow_html=True)
+    features_placeholder.markdown(render_motion_features(metrics), unsafe_allow_html=True)
+    metrics_placeholder.markdown(render_motion_metrics(metrics), unsafe_allow_html=True)
+    render_timeline_and_summary(timeline_placeholder, summary_placeholder, metrics)
+    if snapshot["error_message"]:
+        st.markdown(render_camera_error("Camera Processing Error", snapshot["error_message"], "Stop the camera, reload the page, and try another camera source.", status), unsafe_allow_html=True)
+
+
+def render_local_opencv_panel(
+    raw_placeholder,
+    pose_placeholder,
+    status_placeholder,
+    angles_placeholder,
+    features_placeholder,
+    metrics_placeholder,
+    timeline_placeholder,
+    summary_placeholder,
+) -> None:
+    if cv2 is None or mp is None or vision is None or BaseOptions is None or not POSE_MODEL_PATH.exists():
+        missing = []
+        if cv2 is None:
+            missing.append("opencv-python")
+        if mp is None or vision is None or BaseOptions is None:
+            missing.append("mediapipe")
+        if not POSE_MODEL_PATH.exists():
+            missing.append("pose_landmarker_lite.task")
+        status_placeholder.markdown(render_camera_status("Unavailable", 0.0, "Not Available", "Not Detected", 0, "Local OpenCV", "PC Camera 0", "-", len(st.session_state.frame_metrics)), unsafe_allow_html=True)
+        angles_placeholder.markdown(render_joint_angles({}), unsafe_allow_html=True)
+        features_placeholder.markdown(render_motion_features(st.session_state.frame_metrics), unsafe_allow_html=True)
+        metrics_placeholder.markdown(render_motion_metrics(st.session_state.frame_metrics), unsafe_allow_html=True)
+        render_timeline_and_summary(timeline_placeholder, summary_placeholder, st.session_state.frame_metrics)
+        st.markdown(render_camera_error("Local Camera Not Available", ", ".join(missing), "Install dependencies and confirm the model asset exists.", "Stopped"), unsafe_allow_html=True)
+        return
+
+    if not st.session_state.camera_running:
+        status_placeholder.markdown(render_camera_status("Stopped", 0.0, "Not Detected", "Not Detected", 0, "Local OpenCV", "PC Camera 0", "-", len(st.session_state.frame_metrics)), unsafe_allow_html=True)
+        angles_placeholder.markdown(render_joint_angles({}), unsafe_allow_html=True)
+        features_placeholder.markdown(render_motion_features(st.session_state.frame_metrics), unsafe_allow_html=True)
+        metrics_placeholder.markdown(render_motion_metrics(st.session_state.frame_metrics), unsafe_allow_html=True)
+        render_timeline_and_summary(timeline_placeholder, summary_placeholder, st.session_state.frame_metrics)
+        st.info("Press ????? to open the local desktop camera. This mode works on a local PC only and is not intended for Community Cloud or mobile browsers.")
+        return
+
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        st.session_state.camera_running = False
+        status_placeholder.markdown(render_camera_status("Error", 0.0, "Not Detected", "Not Detected", 0, "Local OpenCV", "PC Camera 0", "-", len(st.session_state.frame_metrics)), unsafe_allow_html=True)
+        angles_placeholder.markdown(render_joint_angles({}), unsafe_allow_html=True)
+        features_placeholder.markdown(render_motion_features(st.session_state.frame_metrics), unsafe_allow_html=True)
+        metrics_placeholder.markdown(render_motion_metrics(st.session_state.frame_metrics), unsafe_allow_html=True)
+        render_timeline_and_summary(timeline_placeholder, summary_placeholder, st.session_state.frame_metrics)
+        st.markdown(render_camera_error("No Camera Available", "cv2.VideoCapture(0) could not open a local camera.", "Use Browser Camera on Community Cloud/mobile, or close other desktop apps using the camera.", "Stopped"), unsafe_allow_html=True)
+        return
+
+    previous_time = time.perf_counter()
+    with create_pose_landmarker() as landmarker:
+        for _ in range(240):
+            if not st.session_state.camera_running:
+                break
+            ok, frame = cap.read()
+            if not ok:
+                st.warning("Camera frame could not be read. The camera may have been disconnected or denied by the OS.")
+                break
+            frame = cv2.flip(frame, 1)
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            results = landmarker.detect(mp_image)
+            landmarks = results.pose_landmarks[0] if results.pose_landmarks else []
+            pose_detected = bool(landmarks)
+            landmark_count = len(landmarks)
+            pose_quality = get_pose_quality(landmarks)
+            raw_angles = calculate_joint_angles(landmarks) if pose_detected else {
+                "left_elbow": None,
+                "right_elbow": None,
+                "left_shoulder": None,
+                "right_shoulder": None,
+                "left_knee": None,
+                "right_knee": None,
+                "trunk_inclination": None,
+            }
+            angles = smooth_joint_angles(raw_angles) if pose_detected else raw_angles
+            overlay = draw_pose_overlay(rgb, landmarks, angles) if pose_detected else rgb.copy()
+            now = time.perf_counter()
+            elapsed = now - previous_time
+            fps = 1.0 / elapsed if elapsed > 0 else 0.0
+            previous_time = now
+            raw_placeholder.image(rgb, channels="RGB", width="stretch")
+            pose_placeholder.image(overlay, channels="RGB", width="stretch")
+            status_placeholder.markdown(render_camera_status("Running", fps, "Detected" if pose_detected else "Not Detected", pose_quality, landmark_count, "Local OpenCV", "PC Camera 0", f"{rgb.shape[1]} x {rgb.shape[0]}", len(st.session_state.frame_metrics)), unsafe_allow_html=True)
+            angles_placeholder.markdown(render_joint_angles(angles), unsafe_allow_html=True)
+            left_wrist = get_normalized_xy(landmarks, 15)
+            right_wrist = get_normalized_xy(landmarks, 16)
+            append_trajectory_point("left_wrist_trajectory", left_wrist)
+            append_trajectory_point("right_wrist_trajectory", right_wrist)
+            append_frame_metric(fps, pose_detected, pose_quality, landmark_count, left_wrist, right_wrist, angles)
+            if len(st.session_state.frame_metrics) % 10 == 0:
+                features_placeholder.markdown(render_motion_features(st.session_state.frame_metrics), unsafe_allow_html=True)
+                metrics_placeholder.markdown(render_motion_metrics(st.session_state.frame_metrics), unsafe_allow_html=True)
+                render_timeline_and_summary(timeline_placeholder, summary_placeholder, st.session_state.frame_metrics)
+            time.sleep(0.01)
+    cap.release()
 
 
 def prototype_camera_screen() -> None:
@@ -896,7 +1336,29 @@ def prototype_camera_screen() -> None:
 
     if "camera_running" not in st.session_state:
         st.session_state.camera_running = False
+    if "camera_source" not in st.session_state:
+        st.session_state.camera_source = "Browser Camera (Recommended)"
     ensure_measurement_state()
+
+    st.markdown('<div class="prototype-card camera-source-card"><h2>Camera Source</h2>', unsafe_allow_html=True)
+    camera_source = st.radio(
+        "Camera Source",
+        ["Browser Camera (Recommended)", "Local OpenCV (Desktop)"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key="camera_source",
+    )
+    camera_name = "PC Camera 0"
+    if camera_source == "Browser Camera (Recommended)":
+        camera_name = st.selectbox(
+            "Camera",
+            ["Default Camera", "Front Camera", "Back Camera", "External or USB Camera"],
+            help="Browser privacy rules do not expose full device names to Streamlit until permission is granted. Choose front/back when using mobile devices.",
+        )
+        st.markdown('<div class="camera-help">Browser Camera uses the camera attached to this device, not the Streamlit server. This is the recommended mode for Community Cloud, iPhone, iPad, Android, Windows, and Mac.</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="camera-help">Local OpenCV opens cv2.VideoCapture(0) on the machine running Streamlit. Use this only for local desktop development.</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     controls_left, controls_right, controls_reset, _ = st.columns([1, 1, 1.25, 2.75])
     with controls_left:
@@ -925,10 +1387,18 @@ def prototype_camera_screen() -> None:
     with video_col:
         st.markdown('<div class="prototype-card"><h2>Camera Feed</h2>', unsafe_allow_html=True)
         raw_placeholder = st.empty()
+        if camera_source == "Browser Camera (Recommended)":
+            raw_placeholder.markdown('<div class="camera-frame">Browser camera preview appears in the WebRTC panel below.</div>', unsafe_allow_html=True)
+        else:
+            raw_placeholder.markdown('<div class="camera-frame">Local OpenCV preview appears here after start.</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
     with pose_col:
         st.markdown('<div class="prototype-card"><h2>Pose Overlay</h2>', unsafe_allow_html=True)
         pose_placeholder = st.empty()
+        if camera_source == "Browser Camera (Recommended)":
+            pose_placeholder.markdown('<div class="camera-frame">Pose overlay is rendered in the WebRTC video output.</div>', unsafe_allow_html=True)
+        else:
+            pose_placeholder.markdown('<div class="camera-frame">Pose landmarks will appear here.</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
     with status_col:
         st.markdown('<div class="prototype-card"><h2>Camera Status</h2>', unsafe_allow_html=True)
@@ -951,175 +1421,13 @@ def prototype_camera_screen() -> None:
     summary_placeholder = st.empty()
     st.markdown('</div>', unsafe_allow_html=True)
 
-    if cv2 is None or mp is None or vision is None or BaseOptions is None or not POSE_MODEL_PATH.exists():
-        missing = []
-        if cv2 is None:
-            missing.append("opencv-python")
-        if mp is None or vision is None or BaseOptions is None:
-            missing.append("mediapipe")
-        if not POSE_MODEL_PATH.exists():
-            missing.append("pose_landmarker_lite.task")
-        raw_placeholder.markdown('<div class="camera-frame">Camera preview unavailable</div>', unsafe_allow_html=True)
-        pose_placeholder.markdown('<div class="camera-frame">Pose overlay unavailable</div>', unsafe_allow_html=True)
-        status_placeholder.markdown(
-            '<div class="status-grid">'
-            '<div class="status-item"><div class="status-label">Camera Status</div><div class="status-value">Stopped</div></div>'
-            '<div class="status-item"><div class="status-label">FPS</div><div class="status-value">0.0</div></div>'
-            '<div class="status-item"><div class="status-label">Pose Detection</div><div class="status-value">Not Available</div></div>'
-            '<div class="status-item"><div class="status-label">Pose Quality</div><div class="status-value">Not Detected</div></div>'
-            '<div class="status-item"><div class="status-label">Detected Landmarks</div><div class="status-value">0</div></div>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-        angles_placeholder.markdown(render_joint_angles({}), unsafe_allow_html=True)
-        features_placeholder.markdown(render_motion_features(st.session_state.frame_metrics), unsafe_allow_html=True)
-        metrics_placeholder.markdown(render_motion_metrics(st.session_state.frame_metrics), unsafe_allow_html=True)
-        timeline_placeholder.markdown('<div class="trajectory-empty">Motion Timeline: Insufficient Data</div>', unsafe_allow_html=True)
-        summary_placeholder.markdown(render_motion_metrics(st.session_state.frame_metrics) + '<div class="summary-note">Prototype motion metrics. Not yet compared with expert reference data.</div>', unsafe_allow_html=True)
-        st.warning(f"Required camera components are not available: {', '.join(missing)}")
-        st.markdown('</div>', unsafe_allow_html=True)
-        return
-
-    if not st.session_state.camera_running:
-        raw_placeholder.markdown('<div class="camera-frame">Press \u30ab\u30e1\u30e9\u958b\u59cb to open the PC camera.</div>', unsafe_allow_html=True)
-        pose_placeholder.markdown('<div class="camera-frame">Pose landmarks will appear here.</div>', unsafe_allow_html=True)
-        status_placeholder.markdown(
-            '<div class="status-grid">'
-            '<div class="status-item"><div class="status-label">Camera Status</div><div class="status-value">Stopped</div></div>'
-            '<div class="status-item"><div class="status-label">FPS</div><div class="status-value">0.0</div></div>'
-            '<div class="status-item"><div class="status-label">Pose Detection</div><div class="status-value">Not Detected</div></div>'
-            '<div class="status-item"><div class="status-label">Pose Quality</div><div class="status-value">Not Detected</div></div>'
-            '<div class="status-item"><div class="status-label">Detected Landmarks</div><div class="status-value">0</div></div>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-        angles_placeholder.markdown(render_joint_angles({}), unsafe_allow_html=True)
-        features_placeholder.markdown(render_motion_features(st.session_state.frame_metrics), unsafe_allow_html=True)
-        metrics_placeholder.markdown(render_motion_metrics(st.session_state.frame_metrics), unsafe_allow_html=True)
-        timeline_df = build_timeline_dataframe(st.session_state.frame_metrics)
-        if timeline_df.empty:
-            timeline_placeholder.markdown('<div class="trajectory-empty">Motion Timeline: Insufficient Data</div>', unsafe_allow_html=True)
-        else:
-            timeline_placeholder.line_chart(timeline_df, x="Frame", y=["Left Elbow Angle", "Left Shoulder Angle", "Trunk Inclination"], height=240)
-        summary_placeholder.markdown(render_motion_metrics(st.session_state.frame_metrics) + '<div class="summary-note">Prototype motion metrics. Not yet compared with expert reference data.</div>', unsafe_allow_html=True)
-        # Future extension points: Motion Score, Expert Similarity, Joint Angles, Trajectory, EMG, AI Coaching.
-        st.markdown('</div>', unsafe_allow_html=True)
-        return
-
-    features_placeholder.markdown(render_motion_features(st.session_state.frame_metrics), unsafe_allow_html=True)
-    metrics_placeholder.markdown(render_motion_metrics(st.session_state.frame_metrics), unsafe_allow_html=True)
-    timeline_df = build_timeline_dataframe(st.session_state.frame_metrics)
-    if timeline_df.empty:
-        timeline_placeholder.markdown('<div class="trajectory-empty">Motion Timeline: Insufficient Data</div>', unsafe_allow_html=True)
+    if camera_source == "Browser Camera (Recommended)":
+        render_browser_camera_panel(camera_name, status_placeholder, angles_placeholder, features_placeholder, metrics_placeholder, timeline_placeholder, summary_placeholder)
     else:
-        timeline_placeholder.line_chart(timeline_df, x="Frame", y=["Left Elbow Angle", "Left Shoulder Angle", "Trunk Inclination"], height=240)
-    summary_placeholder.markdown(render_motion_metrics(st.session_state.frame_metrics) + '<div class="summary-note">Prototype motion metrics. Not yet compared with expert reference data.</div>', unsafe_allow_html=True)
+        render_local_opencv_panel(raw_placeholder, pose_placeholder, status_placeholder, angles_placeholder, features_placeholder, metrics_placeholder, timeline_placeholder, summary_placeholder)
 
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        st.session_state.camera_running = False
-        raw_placeholder.markdown('<div class="camera-frame">Camera could not be opened.</div>', unsafe_allow_html=True)
-        pose_placeholder.markdown('<div class="camera-frame">Pose overlay unavailable.</div>', unsafe_allow_html=True)
-        status_placeholder.markdown(
-            '<div class="status-grid">'
-            '<div class="status-item"><div class="status-label">Camera Status</div><div class="status-value">Error</div></div>'
-            '<div class="status-item"><div class="status-label">FPS</div><div class="status-value">0.0</div></div>'
-            '<div class="status-item"><div class="status-label">Pose Detection</div><div class="status-value">Not Detected</div></div>'
-            '<div class="status-item"><div class="status-label">Pose Quality</div><div class="status-value">Not Detected</div></div>'
-            '<div class="status-item"><div class="status-label">Detected Landmarks</div><div class="status-value">0</div></div>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-        angles_placeholder.markdown(render_joint_angles({}), unsafe_allow_html=True)
-        features_placeholder.markdown(render_motion_features(st.session_state.frame_metrics), unsafe_allow_html=True)
-        metrics_placeholder.markdown(render_motion_metrics(st.session_state.frame_metrics), unsafe_allow_html=True)
-        timeline_placeholder.markdown('<div class="trajectory-empty">Motion Timeline: Insufficient Data</div>', unsafe_allow_html=True)
-        summary_placeholder.markdown(render_motion_metrics(st.session_state.frame_metrics) + '<div class="summary-note">Prototype motion metrics. Not yet compared with expert reference data.</div>', unsafe_allow_html=True)
-        st.error("PC camera is unavailable or already in use.")
-        st.markdown('</div>', unsafe_allow_html=True)
-        return
-
-    previous_time = time.perf_counter()
-    fps = 0.0
-    pose_detected = False
-    landmark_count = 0
-    pose_quality = "Not Detected"
-    st.session_state.setdefault("frame_metrics", [])
-    options = vision.PoseLandmarkerOptions(
-        base_options=BaseOptions(model_asset_path=str(POSE_MODEL_PATH)),
-        running_mode=vision.RunningMode.IMAGE,
-        num_poses=1,
-        min_pose_detection_confidence=0.5,
-        min_pose_presence_confidence=0.5,
-        min_tracking_confidence=0.5,
-    )
-
-    with vision.PoseLandmarker.create_from_options(options) as landmarker:
-        for _ in range(240):
-            if not st.session_state.camera_running:
-                break
-            ok, frame = cap.read()
-            if not ok:
-                break
-
-            frame = cv2.flip(frame, 1)
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-            results = landmarker.detect(mp_image)
-            landmarks = results.pose_landmarks[0] if results.pose_landmarks else []
-            pose_detected = bool(landmarks)
-            landmark_count = len(landmarks)
-            pose_quality = get_pose_quality(landmarks)
-            raw_angles = calculate_joint_angles(landmarks) if pose_detected else {
-                "left_elbow": None,
-                "right_elbow": None,
-                "left_shoulder": None,
-                "right_shoulder": None,
-                "left_knee": None,
-                "right_knee": None,
-                "trunk_inclination": None,
-            }
-            angles = smooth_joint_angles(raw_angles) if pose_detected else raw_angles
-            overlay = draw_pose_overlay(rgb, landmarks, angles) if pose_detected else rgb.copy()
-
-            now = time.perf_counter()
-            elapsed = now - previous_time
-            fps = 1.0 / elapsed if elapsed > 0 else 0.0
-            previous_time = now
-
-            raw_placeholder.image(rgb, channels="RGB", width="stretch")
-            pose_placeholder.image(overlay, channels="RGB", width="stretch")
-            status_placeholder.markdown(
-                '<div class="status-grid">'
-                '<div class="status-item"><div class="status-label">Camera Status</div><div class="status-value running">Running</div></div>'
-                f'<div class="status-item"><div class="status-label">FPS</div><div class="status-value">{fps:.1f}</div></div>'
-                f'<div class="status-item"><div class="status-label">Pose Detection</div><div class="status-value">{"Detected" if pose_detected else "Not Detected"}</div></div>'
-                f'<div class="status-item"><div class="status-label">Pose Quality</div><div class="status-value">{pose_quality}</div></div>'
-                f'<div class="status-item"><div class="status-label">Detected Landmarks</div><div class="status-value">{landmark_count}</div></div>'
-                '</div>',
-                unsafe_allow_html=True,
-            )
-            angles_placeholder.markdown(render_joint_angles(angles), unsafe_allow_html=True)
-            left_wrist = get_normalized_xy(landmarks, 15)
-            right_wrist = get_normalized_xy(landmarks, 16)
-            append_trajectory_point("left_wrist_trajectory", left_wrist)
-            append_trajectory_point("right_wrist_trajectory", right_wrist)
-            append_frame_metric(fps, pose_detected, pose_quality, landmark_count, left_wrist, right_wrist, angles)
-            if len(st.session_state.frame_metrics) % 10 == 0:
-                features_placeholder.markdown(render_motion_features(st.session_state.frame_metrics), unsafe_allow_html=True)
-                metrics_placeholder.markdown(render_motion_metrics(st.session_state.frame_metrics), unsafe_allow_html=True)
-                timeline_df = build_timeline_dataframe(st.session_state.frame_metrics)
-                if timeline_df.empty:
-                    timeline_placeholder.markdown('<div class="trajectory-empty">Motion Timeline: Insufficient Data</div>', unsafe_allow_html=True)
-                else:
-                    timeline_placeholder.line_chart(timeline_df, x="Frame", y=["Left Elbow Angle", "Left Shoulder Angle", "Trunk Inclination"], height=240)
-                summary_placeholder.markdown(render_motion_metrics(st.session_state.frame_metrics) + '<div class="summary-note">Prototype motion metrics. Not yet compared with expert reference data.</div>', unsafe_allow_html=True)
-            time.sleep(0.01)
-
-    cap.release()
     # Future extension points: Motion Score, Expert Similarity, Joint Angles, Trajectory, EMG, AI Coaching.
     st.markdown('</div>', unsafe_allow_html=True)
-
 
 def analyze() -> None:
     progress = st.progress(0)

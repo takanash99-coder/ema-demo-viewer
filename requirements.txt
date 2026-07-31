@@ -5,3 +5,4 @@ qrcode>=7.4
 Pillow>=10.0
 opencv-python>=4.10
 mediapipe>=0.10,<1.0
+streamlit-webrtc>=0.47
