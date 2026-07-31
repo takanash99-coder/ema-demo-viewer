@@ -1,4 +1,5 @@
-﻿import json
+﻿import base64
+import json
 import socket
 import time
 from io import BytesIO
@@ -54,6 +55,7 @@ COACHING_AFTER = {
 
 ANALYSIS_STEPS = ["Capturing Motion", "Detecting Keypoints", "Estimating Motor Strategy", "Generating Coaching Report"]
 SUBJECT_JSON_PATH = Path(__file__).parent / "demo_data" / "public_sample" / "subject.json"
+LOGO_IMAGE_PATH = Path(__file__).parent / "assets" / "ema_logo.png"
 
 
 
@@ -106,20 +108,24 @@ def build_emg_data(analyzed: bool) -> pd.DataFrame:
 def css() -> None:
     st.markdown("""
     <style>
-    :root{--panel:rgba(20,24,34,.88);--soft:rgba(255,255,255,.055);--stroke:rgba(255,255,255,.12);--text:#f6f7fb;--muted:#9aa3b2;--cyan:#4dd0e1;--green:#7ce38b;--yellow:#ffd166;--red:#ff6b6b}
-    .stApp{color:var(--text);background:radial-gradient(circle at 22% 8%,rgba(77,208,225,.18),transparent 28%),radial-gradient(circle at 78% 10%,rgba(79,140,255,.14),transparent 28%),linear-gradient(135deg,#03050a 0%,#101524 58%,#07090f 100%)}
+    :root{--panel:rgba(20,24,34,.88);--soft:rgba(255,255,255,.055);--stroke:rgba(255,255,255,.12);--text:#f6f7fb;--muted:#9aa3b2;--cyan:#4dd0e1;--green:#7ce38b;--yellow:#ffd166;--red:#ff6b6b;--blue:#0b75d1;--navy:#071424;--ink:#102033;--paper:#f7fbff}
+    .stApp{color:var(--text);background:linear-gradient(135deg,#03050a 0%,#101524 58%,#07090f 100%)}
     [data-testid="stHeader"],[data-testid="stToolbar"],[data-testid="stDecoration"]{display:none}.block-container{max-width:1360px;padding:22px 24px 34px}.ipad-shell{border:1px solid rgba(255,255,255,.16);border-radius:34px;padding:18px;background:linear-gradient(145deg,rgba(255,255,255,.16),rgba(255,255,255,.04));box-shadow:0 26px 80px rgba(0,0,0,.44),inset 0 0 0 1px rgba(255,255,255,.05)}
-    .screen{min-height:calc(100vh - 92px);border-radius:24px;padding:26px;background:rgba(7,9,15,.84);border:1px solid rgba(255,255,255,.11);overflow:hidden}.splash{min-height:calc(100vh - 88px);display:flex;align-items:center;justify-content:center;border-radius:28px;border:1px solid rgba(255,255,255,.14);background:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px),radial-gradient(circle at 50% 34%,rgba(77,208,225,.16),transparent 34%),linear-gradient(145deg,rgba(5,12,24,.96),rgba(1,3,8,.98));background-size:42px 42px,42px 42px,auto,auto;box-shadow:inset 0 0 90px rgba(77,208,225,.06),0 26px 80px rgba(0,0,0,.44)}
-    .splash-inner{text-align:center;width:min(820px,92vw);padding:56px 34px}.splash-logo{font-size:88px;font-weight:900;line-height:.9;color:#fff;text-shadow:0 0 34px rgba(77,208,225,.42)}.splash-subtitle{margin-top:14px;color:#dbe8f2;font-size:24px;font-weight:700}.splash-system{margin-top:10px;color:var(--muted);font-size:17px}.splash-copy{display:inline-block;margin-top:26px;padding:11px 16px;border-radius:999px;color:#061018;font-weight:800;background:linear-gradient(90deg,var(--cyan),var(--green))}.start-button-wrap div[data-testid="stButton"]{display:flex;justify-content:center;margin-top:-118px}.start-button-wrap button,.stButton button{border-radius:999px;border:1px solid rgba(255,255,255,.22);background:linear-gradient(90deg,var(--cyan),var(--green));color:#061018;font-weight:850;box-shadow:0 12px 32px rgba(77,208,225,.24)}
-    .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}.brand h1{margin:0;font-size:54px;line-height:.95}.brand .subtitle{margin-top:8px;color:var(--muted);font-size:17px}.tagline{align-self:center;padding:10px 14px;border-radius:999px;color:#061018;font-weight:750;background:linear-gradient(90deg,var(--cyan),var(--green));white-space:nowrap}.phone-warning{display:none;margin-bottom:12px;padding:10px 12px;border-radius:12px;color:#071018;background:var(--yellow);font-weight:800}
+    .screen{min-height:calc(100vh - 92px);border-radius:24px;padding:26px;background:rgba(7,9,15,.84);border:1px solid rgba(255,255,255,.11);overflow:hidden}.phone-warning{display:none;margin-bottom:12px;padding:10px 12px;border-radius:12px;color:#071018;background:var(--yellow);font-weight:800}
+    .splash{min-height:calc(100vh - 88px);display:flex;align-items:center;justify-content:center;border-radius:28px;border:1px solid rgba(255,255,255,.11);background:radial-gradient(circle at 50% 18%,rgba(77,208,225,.12),transparent 34%),linear-gradient(145deg,#05070d 0%,#0b1019 54%,#020305 100%);box-shadow:inset 0 0 70px rgba(255,255,255,.025),0 26px 80px rgba(0,0,0,.44)}
+    .splash-inner{text-align:center;width:min(820px,92vw);padding:64px 34px 110px}.logo-wrap{display:flex;justify-content:center}.logo-img{display:block;width:auto;object-fit:contain}.splash-logo-img{max-width:min(320px,72vw);max-height:180px;margin:0 auto 26px}.home-logo-img{max-width:118px;max-height:78px;margin:0 auto 16px}.logo-mark{display:inline-grid;place-items:center;border-radius:24px;background:linear-gradient(145deg,#0d2d4f,#0b75d1);color:#fff;font-weight:900;letter-spacing:.08em;box-shadow:0 18px 36px rgba(15,89,158,.18)}.splash-logo{width:min(260px,64vw);height:min(150px,36vw);margin:0 auto 26px;font-size:72px}.home-logo{width:86px;height:86px;margin:0 auto 18px;font-size:30px}.splash-subtitle{margin-top:18px;color:#e5edf7;font-size:25px;font-weight:750}.splash-system{margin-top:16px;color:#aeb8c7;font-size:18px;font-weight:650}.splash-copy{margin-top:24px;color:#4dd0e1;font-size:16px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+    .start-button-wrap div[data-testid="stButton"]{display:flex;justify-content:center;margin-top:-106px}.start-button-wrap button,.nav-home button,.nav-back button{min-height:56px;border-radius:999px;border:1px solid rgba(77,208,225,.42);background:linear-gradient(135deg,#0d7bdd,#0b4c96);color:white;font-size:16px;font-weight:900;letter-spacing:.08em;box-shadow:0 12px 26px rgba(13,92,172,.18)}.stButton button{border-radius:999px;border:1px solid rgba(255,255,255,.22);background:linear-gradient(90deg,var(--cyan),var(--green));color:#061018;font-weight:850;box-shadow:0 12px 32px rgba(77,208,225,.24)}
+    .home-shell{min-height:calc(100vh - 86px);padding:42px;border-radius:28px;background:linear-gradient(180deg,#ffffff 0%,#f4f8fd 100%);color:var(--ink);border:1px solid rgba(12,28,48,.08);box-shadow:0 24px 70px rgba(3,10,22,.28)}.home-hero{text-align:center;margin:24px auto 42px;max-width:900px}.home-hero h1{margin:0;color:#061426;font-size:56px;line-height:1;font-weight:900;letter-spacing:.04em}.home-hero .subtitle{margin-top:12px;color:#1c344d;font-size:23px;font-weight:760}.home-hero .system{margin-top:10px;color:#52677e;font-size:17px}.home-hero .copy{margin-top:18px;color:#0a6ecb;font-size:13px;font-weight:850;letter-spacing:.12em;text-transform:uppercase}
+    .home-card{height:274px;padding:30px;border-radius:22px;background:linear-gradient(180deg,#fff 0%,#fbfdff 100%);border:1px solid rgba(12,28,48,.1);box-shadow:0 18px 44px rgba(11,35,68,.1);display:flex;flex-direction:column;justify-content:flex-start}.home-card .kicker{color:#0b75d1;font-size:12px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}.home-card h2{margin:17px 0 12px;color:#102033;font-size:25px;line-height:1.2}.home-card p{margin:0;color:#607187;font-size:15px;line-height:1.75;white-space:pre-line}.card-action div[data-testid="stButton"]{margin-top:-84px;padding:0 22px}.card-action button{min-height:54px;border-radius:16px;background:linear-gradient(135deg,#0d7bdd,#0b4c96);color:white;font-weight:850;box-shadow:0 12px 26px rgba(13,92,172,.18)}.about-ema{margin:54px auto 0;max-width:820px;padding:28px 30px;border-radius:22px;background:#fff;border:1px solid rgba(12,28,48,.08);box-shadow:0 16px 38px rgba(11,35,68,.08);text-align:left}.about-ema h2{margin:0 0 14px;color:#102033;font-size:22px}.about-ema strong{display:block;margin-bottom:8px;color:#1c344d}.about-ema p{margin:0;color:#66778c;font-size:14px;line-height:1.75}.home-footer{margin-top:34px;text-align:center;color:#7b8ca1;font-size:12px;line-height:1.8}
+    .app-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}.nav-brand{color:#dbe8f2;font-size:15px;font-weight:850;letter-spacing:.08em}.nav-back div[data-testid="stButton"]{display:flex;justify-content:flex-end}.nav-home button,.nav-back button{min-width:142px;box-shadow:none}.coming-soon,.loading-screen{min-height:calc(100vh - 120px);display:grid;place-items:center;text-align:center;border-radius:28px;background:linear-gradient(180deg,#f8fbff,#edf4fb);color:#102033;border:1px solid rgba(12,28,48,.08)}.coming-soon .icon{font-size:50px;margin-bottom:14px}.coming-soon h1,.loading-screen h1{margin:0;font-size:44px;color:#102033}.coming-soon p,.loading-screen p{margin:12px 0 0;color:#607187;font-size:18px}.coming-soon .version{margin-top:8px;color:#0b75d1;font-size:13px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}.loading-dot{width:46px;height:46px;margin:0 auto 20px;border-radius:999px;border:4px solid rgba(11,117,209,.16);border-top-color:#0b75d1}.dev-info{margin-bottom:16px}.dev-info div[data-testid="stExpander"]{border:1px solid rgba(255,255,255,.12);border-radius:18px;background:rgba(20,24,34,.72)}
+    .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}.brand h1{margin:0;font-size:54px;line-height:.95}.brand .subtitle{margin-top:8px;color:var(--muted);font-size:17px}.tagline{align-self:center;padding:10px 14px;border-radius:999px;color:#061018;font-weight:750;background:linear-gradient(90deg,var(--cyan),var(--green));white-space:nowrap}
     div[data-testid="stVerticalBlock"]>div:has(.panel-title){padding:16px;border:1px solid var(--stroke);border-radius:18px;background:var(--panel);box-shadow:0 16px 40px rgba(0,0,0,.24)}.panel-title{display:flex;align-items:center;justify-content:space-between;margin:0 0 12px;font-size:16px;font-weight:750}.panel-title span{color:var(--muted);font-size:12px;font-weight:650}.mode-note{padding:12px 14px;border:1px solid var(--stroke);border-radius:14px;background:var(--soft);color:#d8deea;font-size:13px;line-height:1.45}
     .video-area{position:relative;min-height:414px;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.13);background:linear-gradient(0deg,rgba(0,0,0,.42),rgba(0,0,0,.06)),linear-gradient(135deg,#161d28,#253041 48%,#111620);box-shadow:inset 0 0 60px rgba(0,0,0,.34)}.video-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.06) 1px,transparent 1px);background-size:48px 48px;opacity:.32}.video-placeholder{position:absolute;inset:0;display:grid;place-items:center;color:rgba(246,247,251,.78);font-size:14px}.overlay-label{position:absolute;top:14px;left:14px;padding:7px 10px;border-radius:999px;color:#061018;background:rgba(77,208,225,.92);font-size:12px;font-weight:850;z-index:5}.mocap{position:absolute;left:50%;top:52%;width:286px;height:300px;transform:translate(-50%,-50%);z-index:4}.joint,.segment{position:absolute;background:var(--cyan);box-shadow:0 0 20px rgba(77,208,225,.65)}.joint{width:15px;height:15px;border-radius:50%;transform:translate(-50%,-50%);border:1px solid rgba(255,255,255,.62)}.joint.target{width:19px;height:19px;background:var(--green);box-shadow:0 0 26px rgba(124,227,139,.8)}.joint.hot{background:var(--yellow);box-shadow:0 0 26px rgba(255,209,102,.8)}.segment{height:4px;border-radius:999px;transform-origin:left center;opacity:.9}.video-hud{position:absolute;left:18px;right:18px;bottom:18px;display:flex;justify-content:space-between;gap:12px;z-index:6}.hud-chip{padding:8px 11px;border-radius:999px;background:rgba(0,0,0,.48);border:1px solid rgba(255,255,255,.12);font-size:13px}
     .timeline-item{display:grid;grid-template-columns:58px 10px 1fr;gap:12px;align-items:start;padding:0 0 15px}.timeline-time{color:var(--muted);font-size:13px}.timeline-dot{width:10px;height:10px;margin-top:4px;border-radius:50%;box-shadow:0 0 16px currentColor}.timeline-label{font-weight:700;line-height:1.15}.timeline-state{color:var(--muted);font-size:13px;margin-top:3px}.score-card,.coach-card{padding:12px;border:1px solid var(--stroke);border-radius:14px;background:var(--soft);margin-bottom:10px}.score-row{display:flex;justify-content:space-between;gap:12px;margin-bottom:8px;font-size:14px}.score-value{color:var(--green);font-weight:800}.score-comment{margin-top:8px;color:#cbd5e1;font-size:12.5px;line-height:1.45}.bar{height:8px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.1)}.bar span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--cyan),var(--green))}.coach-card strong{display:block;margin-bottom:6px;color:var(--cyan)}.coach-card p{margin:0;color:#d8deea;font-size:14px;line-height:1.48}
     .connection-panel{margin-bottom:16px;padding:16px;border:1px solid var(--stroke);border-radius:18px;background:var(--panel);box-shadow:0 16px 40px rgba(0,0,0,.24)}.connection-title{font-size:18px;font-weight:850;margin-bottom:10px}.connection-note{color:#d8deea;font-size:13px;line-height:1.45;margin-top:8px}.connection-label{color:var(--muted);font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
-    @media(max-width:760px){.phone-warning{display:block}.block-container{min-width:1060px;padding:10px}.ipad-shell{border-radius:24px;padding:10px}.screen{border-radius:18px;padding:16px}}
+    @media(max-width:760px){.phone-warning{display:block}.block-container{min-width:0;padding:10px}.ipad-shell{border-radius:24px;padding:10px}.screen{border-radius:18px;padding:16px}.home-shell{min-width:0;padding:24px 18px}.home-hero{margin-top:20px}.home-hero h1{font-size:42px}.home-hero .subtitle{font-size:20px}.home-card{height:auto;min-height:230px}.about-ema{margin-top:42px;padding:22px}.splash-inner{padding-inline:20px}.splash-subtitle{font-size:21px}.splash-system{font-size:16px}.start-button-wrap div[data-testid="stButton"]{margin-top:-96px}.app-nav{gap:10px}.nav-brand{display:none}.nav-home button,.nav-back button{min-width:120px}}
     </style>
     """, unsafe_allow_html=True)
-
 
 def get_lan_ipv4() -> str:
     try:
@@ -223,17 +229,126 @@ def render_demo_video(show_overlay: bool, label: str) -> None:
     """, unsafe_allow_html=True)
 
 
+def logo_markup(context: str) -> str:
+    if LOGO_IMAGE_PATH.exists():
+        image_data = base64.b64encode(LOGO_IMAGE_PATH.read_bytes()).decode("ascii")
+        css_class = "splash-logo-img" if context == "splash" else "home-logo-img"
+        return f'<div class="logo-wrap"><img class="logo-img {css_class}" src="data:image/png;base64,{image_data}" alt="EMA logo"></div>'
+
+    css_class = "splash-logo" if context == "splash" else "home-logo"
+    return f'<div class="logo-wrap"><div class="logo-mark {css_class}">EMA</div></div>'
+
+
+def go_home() -> None:
+    st.session_state.view = "home"
+
+
+def render_app_nav(show_back: bool = False) -> None:
+    left, center, right = st.columns([1, 2, 1])
+    with left:
+        st.markdown('<div class="nav-home">', unsafe_allow_html=True)
+        if st.button("EMA HOME", width="stretch"):
+            go_home()
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+    with center:
+        st.markdown('<div class="nav-brand">EMA / Expert Motion Coaching AI</div>', unsafe_allow_html=True)
+    with right:
+        if show_back:
+            st.markdown('<div class="nav-back">', unsafe_allow_html=True)
+            if st.button("BACK", width="stretch"):
+                go_home()
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+
+
 def start_screen() -> None:
+    st.markdown('<div class="ipad-shell"><div class="splash"><div class="splash-inner">', unsafe_allow_html=True)
+    st.markdown(logo_markup("splash"), unsafe_allow_html=True)
     st.markdown("""
-    <div class="splash"><div class="splash-inner"><div class="splash-logo">EMA</div><div class="splash-subtitle">Expert Motion Coaching AI</div><div class="splash-system">AI-powered Endotracheal Intubation Coaching System</div><div class="splash-copy">From Motion to Mastery</div></div></div>
+        <div class="splash-subtitle">Expert Motion Coaching AI</div>
+        <div class="splash-system">AI-powered Endotracheal Intubation Coaching System</div>
+        <div class="splash-copy">From Motion to Mastery</div>
+        </div></div></div>
     """, unsafe_allow_html=True)
     st.markdown('<div class="start-button-wrap">', unsafe_allow_html=True)
-    _, c, _ = st.columns([1, 1, 1])
-    with c:
-        if st.button("Start Demo", width="stretch"):
-            st.session_state.started = True
+    if st.button("START", width=240):
+        st.session_state.view = "home"
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+def render_home_card(kicker: str, title: str, body: str, button_label: str) -> bool:
+    st.markdown(f'<div class="home-card"><div class="kicker">{kicker}</div><h2>{title}</h2><p>{body}</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="card-action">', unsafe_allow_html=True)
+    clicked = st.button(button_label, width="stretch")
+    st.markdown('</div>', unsafe_allow_html=True)
+    return clicked
+
+
+def home_screen() -> None:
+    st.markdown('<div class="ipad-shell"><div class="home-shell">', unsafe_allow_html=True)
+    st.markdown(logo_markup("home"), unsafe_allow_html=True)
+    st.markdown("""
+        <div class="home-hero">
+            <h1>EMA</h1>
+            <div class="subtitle">Expert Motion Coaching AI</div>
+            <div class="system">AI-powered Endotracheal Intubation Coaching System</div>
+            <div class="copy">From Motion to Mastery</div>
+        </div>
+    """, unsafe_allow_html=True)
+    teaching, recording, demo = st.columns(3, gap="large")
+    with teaching:
+        if render_home_card("Teaching Mode", "AI-guided Skill Coaching", "\u719f\u7df4\u8005\u30e2\u30c7\u30eb\u306b\u3088\u308b\\n\u30ea\u30a2\u30eb\u30bf\u30a4\u30e0\u6559\u80b2", "TEACHING"):
+            st.session_state.view = "coming_soon"
             st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
+    with recording:
+        if render_home_card("Recording & Assessment", "Motion Analysis", "\u52d5\u753b\u89e3\u6790\\nAI\u63a1\u70b9\\n\u8a55\u4fa1\u30ec\u30dd\u30fc\u30c8", "RECORDING"):
+            st.session_state.view = "coming_soon"
+            st.rerun()
+    with demo:
+        if render_home_card("Demo Viewer", "Current Public Demo", "EMA\u30c7\u30e2\u3092\u4f53\u9a13", "DEMO VIEWER"):
+            st.session_state.view = "loading_dashboard"
+            st.rerun()
+    st.markdown("""
+        <div class="about-ema">
+            <h2>About EMA</h2>
+            <strong>Expert Motion Coaching AI</strong>
+            <p>AI-powered Endotracheal Intubation Coaching System</p>
+            <p>An educational platform designed to support objective skill assessment and AI-assisted coaching using motion analysis.</p>
+        </div>
+        <div class="home-footer">Version 0.5<br>&copy; 2026 EMA Project</div>
+    """, unsafe_allow_html=True)
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+
+def coming_soon_screen() -> None:
+    render_app_nav(show_back=True)
+    st.markdown("""
+        <div class="coming-soon">
+            <div>
+                <div class="icon">&#128679;</div>
+                <h1>Coming Soon</h1>
+                <p>AI Coaching Module</p>
+                <div class="version">Version 1.0</div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+
+def loading_screen() -> None:
+    st.markdown("""
+        <div class="loading-screen">
+            <div>
+                <div class="loading-dot"></div>
+                <h1>Loading EMA Demo...</h1>
+                <p>Preparing the public demonstration</p>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    time.sleep(0.7)
+    st.session_state.view = "dashboard"
+    st.rerun()
 
 
 def analyze() -> None:
@@ -324,18 +439,27 @@ def dashboard() -> None:
     st.markdown("</div></div>", unsafe_allow_html=True)
 
 
-if "started" not in st.session_state:
-    st.session_state.started = False
+if "view" not in st.session_state:
+    st.session_state.view = "splash"
 if "analyzed" not in st.session_state:
     st.session_state.analyzed = False
 
 css()
-render_connection_information()
-render_external_demo_access()
-render_subject_information()
-if st.session_state.started:
-    dashboard()
-else:
+
+if st.session_state.view == "splash":
     start_screen()
-
-
+elif st.session_state.view == "home":
+    home_screen()
+elif st.session_state.view == "coming_soon":
+    coming_soon_screen()
+elif st.session_state.view == "loading_dashboard":
+    loading_screen()
+else:
+    render_app_nav(show_back=True)
+    st.markdown('<div class="dev-info">', unsafe_allow_html=True)
+    with st.expander("Development Information"):
+        render_connection_information()
+        render_external_demo_access()
+    st.markdown('</div>', unsafe_allow_html=True)
+    render_subject_information()
+    dashboard()
